@@ -113,6 +113,15 @@ def fetch_products_branch(marker, branch_url):
     return response
 
 
+def fetch_product_by_id(access_token, product_id):
+    url = f'https://api.moltin.com/pcm/products/{product_id}'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()
+
 def generate_client_token(access_token):
     url = 'https://api.moltin.com/v2/customers/tokens'
     headers = {
@@ -161,7 +170,7 @@ def main():
     products = fetch_products(access_token)
     print(products)
     one_product = products["data"][0]
-
+    f = fetch_product_by_id(access_token, products["data"][0]['id'])
     marker = fetch_access_marker(client_id)
     branch_url = get_branch(marker)
     # cart = get_branch_f(access_token)
