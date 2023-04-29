@@ -2,7 +2,9 @@ import os
 import logging
 import redis
 from environs import Env
-from main import fetch_products, fetch_access_token
+from functools import partial
+from main import fetch_products, fetch_access_token, fetch_product_by_id
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Filters, Updater
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
@@ -13,19 +15,11 @@ env.read_env()
 
 _database = None
 
-def start(bot, update):
-    """
-    Хэндлер для состояния START.
-    
-    Бот отвечает пользователю фразой "Привет!" и переводит его в состояние ECHO.
-    Теперь в ответ на его команды будет запускаеться хэндлер echo.
-    """
-    client_id = env.str("CLIENT_ID")
-    client_secret = env.str("SECRET_KEY")
-    access_token = fetch_access_token(client_id, client_secret)
+
+def start(bot, update, access_token):
+
     products = fetch_products(access_token)
     keyboard = []
-    products['data'][0]['attributes']['name']
     for product in products['data']:
         keyboard.append([InlineKeyboardButton(product['attributes']['name'],
                                               callback_data=product['id'])])
@@ -36,21 +30,22 @@ def start(bot, update):
     return "HANDLE_MENU"
 
 
-def handle_menu(bot, update):
+def handle_menu(bot, update, access_token):
     """
     Хэндлер для обработки нажатия на кнопку.
     """
     query = update.callback_query
     product_id = query.data
-    # product = fetch_product_by_id(access_token, product_id)
-
-    bot.edit_message_text(text="Selected option: {}".format(query.data),
+    product = fetch_product_by_id(access_token, product_id)
+    product_attributes = product['data']['attributes']
+    text = f"{product_attributes['name']} \n\n{product_attributes['description']}"
+    bot.edit_message_text(text=text,
                           chat_id=query.message.chat_id,
                           message_id=query.message.message_id)
     return "START"
 
 
-def handle_users_reply(bot, update):
+def handle_users_reply(bot, update, access_token):
     """
     Функция, которая запускается при любом сообщении от пользователя и решает как его обработать.
     Эта функция запускается в ответ на эти действия пользователя:
@@ -86,10 +81,11 @@ def handle_users_reply(bot, update):
     # Оставляю этот try...except, чтобы код не падал молча.
     # Этот фрагмент можно переписать.
     try:
-        next_state = state_handler(bot, update)
+        next_state = state_handler(bot, update, access_token)
         db.set(chat_id, next_state)
     except Exception as err:
         print(err)
+
 
 def get_database_connection():
     """
@@ -106,9 +102,16 @@ def get_database_connection():
 
 if __name__ == '__main__':
     token = env.str("TG_API_TOKEN")
+    client_id = env.str("CLIENT_ID")
+    client_secret = env.str("SECRET_KEY")
+    access_token = fetch_access_token(client_id, client_secret)
     updater = Updater(token)
+
+    handle_users = partial(handle_users_reply, access_token=access_token)
+
     dispatcher = updater.dispatcher
-    dispatcher.add_handler(CallbackQueryHandler(handle_users_reply))
-    dispatcher.add_handler(MessageHandler(Filters.text, handle_users_reply))
-    dispatcher.add_handler(CommandHandler('start', handle_users_reply))
+    dispatcher.add_handler(CallbackQueryHandler(handle_users))
+    dispatcher.add_handler(MessageHandler(Filters.text, handle_users))
+    dispatcher.add_handler(CommandHandler('start', handle_users))
+
     updater.start_polling()
