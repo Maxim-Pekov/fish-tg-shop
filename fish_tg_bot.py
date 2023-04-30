@@ -1,9 +1,8 @@
-import os
 import logging
 import redis
 from environs import Env
 from functools import partial
-from main import fetch_products, fetch_access_token, fetch_product_by_id
+from main import fetch_products, fetch_access_token, fetch_product_by_id, fetch_product_photo_by_id, fetch_photo_by_id
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Filters, Updater
@@ -38,10 +37,16 @@ def handle_menu(bot, update, access_token):
     product_id = query.data
     product = fetch_product_by_id(access_token, product_id)
     product_attributes = product['data']['attributes']
+    try:
+        photo_id = fetch_product_photo_by_id(access_token, product_id)
+        photo = fetch_photo_by_id(access_token, photo_id)
+    except TypeError:
+        photo = "https://avatars.mds.yandex.net/i?id=cd502f949a596919c1b8feac39a0a5e4-5330065-images-thumbs&n=13"
+
     text = f"{product_attributes['name']} \n\n{product_attributes['description']}"
-    bot.edit_message_text(text=text,
-                          chat_id=query.message.chat_id,
-                          message_id=query.message.message_id)
+    bot.send_photo(chat_id=query.message.chat_id, photo=photo, caption=text)
+    bot.delete_message(chat_id=query.message.chat_id,
+                       message_id=query.message.message_id)
     return "START"
 
 
@@ -77,9 +82,6 @@ def handle_users_reply(bot, update, access_token):
         'HANDLE_MENU': handle_menu,
     }
     state_handler = states_functions[user_state]
-    # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.
-    # Оставляю этот try...except, чтобы код не падал молча.
-    # Этот фрагмент можно переписать.
     try:
         next_state = state_handler(bot, update, access_token)
         db.set(chat_id, next_state)

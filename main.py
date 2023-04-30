@@ -89,13 +89,13 @@ def put_product_to_branch(marker, one_product, branch_url, client_id):
     payload = {
         'data': {
             'type': 'custom_item',
-                'name': one_product.get('attributes').get('name'),
-                'sku': one_product.get('attributes').get('sku'),
-                'description': one_product.get('attributes').get('description', 'Нет описания'),
-                'quantity': 1,
-                'price': {
-                    'amount': 200,
-                },
+            'name': one_product.get('attributes').get('name'),
+            'sku': one_product.get('attributes').get('sku'),
+            'description': one_product.get('attributes').get('description', 'Нет описания'),
+            'quantity': 1,
+            'price': {
+                'amount': 200,
+            },
         }
     }
     response = requests.post(url, headers=headers, json=payload)
@@ -121,6 +121,27 @@ def fetch_product_by_id(access_token, product_id):
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.json()
+
+
+def fetch_product_photo_by_id(access_token, product_id):
+    url = f'https://api.moltin.com/pcm/products/{product_id}/relationships/main_image'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()['data']['id']
+
+
+def fetch_photo_by_id(access_token, photo_id):
+    url = f'https://api.moltin.com/v2/files/{photo_id}'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()['data']['link']['href']
+
 
 def generate_client_token(access_token):
     url = 'https://api.moltin.com/v2/customers/tokens'
@@ -169,8 +190,11 @@ def main():
     print(access_token)
     products = fetch_products(access_token)
     print(products)
-    one_product = products["data"][0]
-    f = fetch_product_by_id(access_token, products["data"][0]['id'])
+    one_product = products["data"][1]
+    f = fetch_product_by_id(access_token, products["data"][1]['id'])
+    product_photo_id = fetch_product_photo_by_id(access_token, products["data"][1]['id'])
+    product_photo = fetch_photo_by_id(access_token, product_photo_id)
+    print(product_photo)
     marker = fetch_access_marker(client_id)
     branch_url = get_branch(marker)
     # cart = get_branch_f(access_token)
