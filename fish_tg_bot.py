@@ -44,10 +44,28 @@ def handle_menu(bot, update, access_token):
         photo = "https://avatars.mds.yandex.net/i?id=cd502f949a596919c1b8feac39a0a5e4-5330065-images-thumbs&n=13"
 
     text = f"{product_attributes['name']} \n\n{product_attributes['description']}"
-    bot.send_photo(chat_id=query.message.chat_id, photo=photo, caption=text)
+    keyboard = [[InlineKeyboardButton("Назад", callback_data='назад')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    bot.send_photo(chat_id=query.message.chat_id, photo=photo, caption=text, reply_markup=reply_markup)
     bot.delete_message(chat_id=query.message.chat_id,
                        message_id=query.message.message_id)
-    return "START"
+    return "HANDLE_DESCRIPTION"
+
+
+def handle_description(bot, update, access_token):
+    query = update.callback_query
+    products = fetch_products(access_token)
+    keyboard = []
+    for product in products['data']:
+        keyboard.append([InlineKeyboardButton(product['attributes']['name'],
+                                              callback_data=product['id'])])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    bot.send_message(chat_id=query.message.chat_id, text="Выберете дальнейшее действие:", reply_markup=reply_markup)
+    bot.delete_message(chat_id=query.message.chat_id,
+                       message_id=query.message.message_id)
+    return "HANDLE_MENU"
 
 
 def handle_users_reply(bot, update, access_token):
@@ -80,6 +98,7 @@ def handle_users_reply(bot, update, access_token):
     states_functions = {
         'START': start,
         'HANDLE_MENU': handle_menu,
+        'HANDLE_DESCRIPTION': handle_description
     }
     state_handler = states_functions[user_state]
     try:
