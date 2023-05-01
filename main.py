@@ -5,17 +5,6 @@ env = Env()
 env.read_env()
 
 
-
-# data = {
-#       "type": "custom_item",
-#       "name": "blue fish",
-#       "sku": "fish-001",
-#       "description": "Sweet fish",
-#       "quantity": "2",
-#       "price": { "amount": 5000 }
-# }
-
-
 def fetch_access_token( client_id, client_secret ):
 
     url = 'https://api.moltin.com/oauth/access_token'
@@ -50,8 +39,8 @@ def fetch_access_marker(client_id):
     return response.json()['access_token']
 
 
-def get_branch(access_token):
-    url = 'https://api.moltin.com/v2/carts/abcd'
+def get_branch(access_token, chat_id):
+    url = f'https://api.moltin.com/v2/carts/{chat_id}'
     headers = {
         'Authorization': f'Bearer {access_token}',
     }
@@ -78,7 +67,7 @@ def get_branch_f(access_token):
     return response.json()
 
 
-def put_product_to_branch(marker, one_product, branch_url, client_id):
+def put_product_to_branch(marker, product, branch_url, client_id, product_price, product_count):
     if not marker:
         fetch_access_marker(client_id)
     url = f'https://api.moltin.com/v2/carts/{branch_url}/items'
@@ -89,12 +78,12 @@ def put_product_to_branch(marker, one_product, branch_url, client_id):
     payload = {
         'data': {
             'type': 'custom_item',
-            'name': one_product.get('attributes').get('name'),
-            'sku': one_product.get('attributes').get('sku'),
-            'description': one_product.get('attributes').get('description', 'Нет описания'),
-            'quantity': 1,
+            'name': product.get('data').get('attributes').get('name'),
+            'sku': product.get('data').get('attributes').get('sku'),
+            'description': product.get('data').get('attributes').get('description', 'Нет описания'),
+            'quantity': int(product_count),
             'price': {
-                'amount': 200,
+                'amount': product_price,
             },
         }
     }
@@ -141,6 +130,37 @@ def fetch_photo_by_id(access_token, photo_id):
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.json()['data']['link']['href']
+
+
+def fetch_prices_book(access_token):
+    url = 'https://api.moltin.com/pcm/pricebooks/'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()
+
+
+def fetch_product_prices(access_token, price_id):
+    # url = f'https://api.moltin.com/pcm/pricebooks/{price_id}/prices/{product_id}/'
+    url = f'https://api.moltin.com/pcm/pricebooks/{price_id}/prices'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()
+
+
+def fetch_product_stock(access_token, product_id):
+    url = f'https://api.moltin.com/v2/inventories/{product_id}'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()['data']['available']
 
 
 def generate_client_token(access_token):
@@ -190,11 +210,14 @@ def main():
     print(access_token)
     products = fetch_products(access_token)
     print(products)
-    one_product = products["data"][1]
-    f = fetch_product_by_id(access_token, products["data"][1]['id'])
-    product_photo_id = fetch_product_photo_by_id(access_token, products["data"][1]['id'])
+    one_product = products["data"][0]
+    product = fetch_product_by_id(access_token, products["data"][0]['id'])
+    product_photo_id = fetch_product_photo_by_id(access_token, products["data"][0]['id'])
     product_photo = fetch_photo_by_id(access_token, product_photo_id)
     print(product_photo)
+    price_book_id = fetch_prices_book(access_token)
+    prices = fetch_product_prices(access_token, price_book_id)
+
     marker = fetch_access_marker(client_id)
     branch_url = get_branch(marker)
     # cart = get_branch_f(access_token)
