@@ -1,11 +1,12 @@
-import logging
-import redis as redis_db
 import time
+import logging
+
+import redis as redis_db
 from environs import Env
 from functools import partial
 from logs_handler import TelegramLogsHandler
 
-from elasticpath_api import fetch_products, fetch_access_token, create_client, \
+from elasticpath_api import fetch_products, fetch_access_token, create_client,\
     fetch_product_by_id, fetch_product_photo_id, fetch_photo_by_id, \
     fetch_product_prices, fetch_prices_book, fetch_product_stock, \
     put_product_to_cart, fetch_cart_products, remove_product_from_cart
@@ -51,10 +52,11 @@ def handle_description(bot, update, access_token):
     price_books = fetch_prices_book(access_token)
     price_id = 0
     for price_book in price_books['data']:
-        if price_book['attributes']['name'] == product['data']['attributes']['name']:
+        product_name = product['data']['attributes']['name']
+        if price_book['attributes']['name'] == product_name:
             price_id = price_book['id']
-    prices = fetch_product_prices(access_token, price_id)
-    product_price = prices['data'][0]['attributes']['currencies']['USD']['amount']
+    prices = fetch_product_prices(access_token, price_id)['data']
+    product_price = prices[0]['attributes']['currencies']['USD']['amount']
     product_stock = fetch_product_stock(access_token, product_id)
     if product_count:
         put_product_to_cart(
@@ -66,32 +68,42 @@ def handle_description(bot, update, access_token):
     except TypeError:
         photo = "https://avatars.mds.yandex.net/i?id=cd502f949a596919c1b8feac39a0a5e4-5330065-images-thumbs&n=13"
 
-    text = f"{product_attributes['name']}: \n\nцена {product_price / 100}$ за " \
-           f"кг.\nостаток на складе {product_stock} кг.  " \
+    text = f"{product_attributes['name']}: \n\nцена {product_price / 100}$ " \
+           f"за кг.\nостаток на складе {product_stock} кг.  " \
            f"\n\n{product_attributes['description']}"
 
     keyboard = []
-    product_count_keyboard = [InlineKeyboardButton("1кг.", callback_data=f'1кг {product_id}'),
-                              InlineKeyboardButton("5кг.", callback_data=f'5кг {product_id}'),
-                              InlineKeyboardButton("10кг.", callback_data=f'10кг {product_id}')]
+    product_count_keyboard = [
+        InlineKeyboardButton("1кг.", callback_data=f'1кг {product_id}'),
+        InlineKeyboardButton("5кг.", callback_data=f'5кг {product_id}'),
+        InlineKeyboardButton("10кг.", callback_data=f'10кг {product_id}')
+    ]
     keyboard.append(product_count_keyboard)
     products = fetch_cart_products(access_token, chat_id)
     if products.get('data'):
         keyboard.append(
             [InlineKeyboardButton(
-                f"Корзина: {len(products.get('data'))} продукт(а/ов), на сумму: "
+                f"Корзина: {len(products.get('data'))} продукт/ов, на сумму: "
                 f"{products['meta']['display_price']['with_tax']['formatted']}",
                 callback_data='корзина'
             )]
         )
     else:
-        keyboard.append([InlineKeyboardButton("Корзина пустая", callback_data='корзина')])
+        keyboard.append(
+            [InlineKeyboardButton("Корзина пустая", callback_data='корзина')]
+        )
     keyboard.append([InlineKeyboardButton("Назад", callback_data='назад')])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    bot.send_photo(chat_id=query.message.chat_id, photo=photo, caption=text, reply_markup=reply_markup)
-    bot.delete_message(chat_id=query.message.chat_id,
-                       message_id=query.message.message_id)
+    bot.send_photo(
+        chat_id=query.message.chat_id,
+        photo=photo, caption=text,
+        reply_markup=reply_markup
+    )
+    bot.delete_message(
+        chat_id=query.message.chat_id,
+        message_id=query.message.message_id
+    )
     return "HANDLE_DESCRIPTION"
 
 
@@ -104,9 +116,15 @@ def handle_menu(bot, update, access_token):
                                               callback_data=product['id'])])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    bot.send_message(chat_id=query.message.chat_id, text="Выберете дальнейшее действие:", reply_markup=reply_markup)
-    bot.delete_message(chat_id=query.message.chat_id,
-                       message_id=query.message.message_id)
+    bot.send_message(
+        chat_id=query.message.chat_id,
+        text="Выберете дальнейшее действие:",
+        reply_markup=reply_markup
+    )
+    bot.delete_message(
+        chat_id=query.message.chat_id,
+        message_id=query.message.message_id
+    )
     return "HANDLE_DESCRIPTION"
 
 
@@ -127,22 +145,31 @@ def handle_cart(bot, update, access_token):
                 callback_data=f"удалить {product['id']}"
             )]
         )
+        price_with_tax = product['meta']['display_price']['with_tax']
         prodect_text = f"{product['name']}:\n" \
                        f"Описание: {product['description']}\n" \
                        f"Кол-во: {product['quantity']}шт.\n" \
-                       f"Цена: {product['meta']['display_price']['with_tax']['unit']['formatted']} за кг.\n" \
-                       f"Стоймость позиции: {product['meta']['display_price']['with_tax']['value']['formatted']}\n\n"
+                       f"Цена: {price_with_tax['unit']['formatted']} за кг.\n"\
+                       f"Стоймость позиции: " \
+                       f"{price_with_tax['value']['formatted']}\n\n"
         cart_text += prodect_text
-    cart_text += f"Итоговая стоймость: {products_in_cart['meta']['display_price']['with_tax']['formatted']}"
+    value_price = products_in_cart['meta']['display_price']['with_tax']
+    cart_text += f"Итоговая стоймость: {value_price['formatted']}"
     keyboard.append([InlineKeyboardButton('В меню', callback_data='назад')])
     keyboard.append([InlineKeyboardButton('Оплатить', callback_data='paid')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     if not products_in_cart['data']:
-        cart_text = 'В данный момент ваша корзина пуста, вернитесь в главное ' \
+        cart_text = 'В данный момент ваша корзина пуста, вернитесь в главное '\
                     'меню и сначала положите товар в корзину.'
-    bot.send_message(chat_id=query.message.chat_id, text=cart_text, reply_markup=reply_markup)
-    bot.delete_message(chat_id=query.message.chat_id,
-                       message_id=query.message.message_id)
+    bot.send_message(
+        chat_id=query.message.chat_id,
+        text=cart_text,
+        reply_markup=reply_markup
+    )
+    bot.delete_message(
+        chat_id=query.message.chat_id,
+        message_id=query.message.message_id
+    )
     return "HANDLE_CART"
 
 
@@ -162,8 +189,15 @@ def handle_paid(bot, update, access_token):
             [InlineKeyboardButton('Не верно', callback_data='HANDLE_PAID')],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
-        bot.delete_message(chat_id=chat_id, message_id=query.message.message_id)
+        bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup
+        )
+        bot.delete_message(
+            chat_id=chat_id,
+            message_id=query.message.message_id
+        )
         return "HANDLE_PAID"
     chat_id = query.message.chat_id
     bot.send_message(chat_id=chat_id, text=text)
@@ -177,7 +211,8 @@ def handle_users_reply(bot, update, access_token, client_id, expires_time,
     решает как его обработать."""
 
     if time.time() >= expires_time:
-        access_token, expires_time = fetch_access_token(client_id, client_secret)
+        access_token, expires_time = fetch_access_token(
+            client_id, client_secret)
 
     if update.message:
         user_reply = update.message.text
@@ -197,7 +232,6 @@ def handle_users_reply(bot, update, access_token, client_id, expires_time,
         user_state = "HANDLE_PAID"
     else:
         user_state = redis.get(chat_id).decode("utf-8")
-    
     states_functions = {
         'START': start,
         'HANDLE_MENU': handle_menu,
@@ -220,8 +254,11 @@ def main():
     database_host = env.str("REDIS_HOST")
     database_port = env.str("REDIS_PORT")
 
-    redis = redis_db.Redis(host=database_host, port=database_port,
-                            password=database_password)
+    redis = redis_db.Redis(
+        host=database_host,
+        port=database_port,
+        password=database_password
+    )
 
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - '
                                '%(message)s', datefmt='%d-%m-%Y %I:%M:%S %p',

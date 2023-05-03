@@ -24,21 +24,22 @@ def fetch_products(access_token):
     return response.json()
 
 
-def put_product_to_cart(marker, product, chat_id, product_price, product_count):
+def put_product_to_cart(marker, product, chat_id, price, product_count):
     url = f'https://api.moltin.com/v2/carts/{chat_id}/items'
     headers = {
         'Authorization': f'Bearer {marker}',
         'Content-Type': 'application/json',
     }
+    description = product['data']['attributes'].get('description', 'Нет')
     payload = {
         'data': {
             'type': 'custom_item',
             'name': product.get('data').get('attributes').get('name'),
             'sku': product.get('data').get('attributes').get('sku'),
-            'description': product.get('data').get('attributes').get('description', 'Нет описания'),
+            'description': description,
             'quantity': int(product_count),
             'price': {
-                'amount': product_price,
+                'amount': price,
             },
         }
     }
