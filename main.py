@@ -92,14 +92,23 @@ def put_product_to_branch(marker, product, chat_id, client_id, product_price, pr
     return True
 
 
-def fetch_products_branch(marker, chat_id):
+def fetch_products_branch(access_token, chat_id):
     url = f'https://api.moltin.com/v2/carts/{chat_id}/items'
     headers = {
-        'Authorization': f'Bearer {marker}',
+        'Authorization': f'Bearer {access_token}',
     }
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.json()
+
+
+def remove_product_from_cart(access_token, chat_id, product_id):
+    url = f"https://api.moltin.com/v2/carts/{chat_id}/items/{product_id}"
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    response = requests.delete(url, headers=headers)
+    response.raise_for_status()
 
 
 def fetch_product_by_id(access_token, product_id):

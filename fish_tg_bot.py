@@ -5,7 +5,7 @@ from functools import partial
 from main import fetch_products, fetch_access_token, fetch_product_by_id, fetch_product_photo_by_id, fetch_photo_by_id
 from main import fetch_product_prices, fetch_prices_book, \
     fetch_product_stock, fetch_access_marker, get_branch, \
-    put_product_to_branch, fetch_products_branch
+    put_product_to_branch, fetch_products_branch, remove_product_from_cart
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Filters, Updater
@@ -101,9 +101,20 @@ def handle_menu(bot, update, access_token, client_id):
 def handle_cart(bot, update, access_token, client_id):
     query = update.callback_query
     chat_id = query.message.chat_id
+    if "удалить" in query.data:
+        product_id = query.data.split()[1]
+        remove_product_from_cart(access_token, chat_id, product_id)
+
     products_in_cart = fetch_products_branch(access_token, chat_id)
     cart_text = ''
+    keyboard = []
     for product in products_in_cart['data']:
+        keyboard.append(
+            [InlineKeyboardButton(
+                f"Убрать из корзины {product['name']}",
+                callback_data=f"удалить {product['id']}"
+            )]
+        )
         prodect_text = f"{product['name']}:\n" \
                        f"Описание: {product['description']}\n" \
                        f"Кол-во: {product['quantity']}шт.\n" \
@@ -111,9 +122,11 @@ def handle_cart(bot, update, access_token, client_id):
                        f"Стоймость позиции: ${product['value']['amount']}\n\n"
         cart_text += prodect_text
     cart_text += f"Итоговая стоймость: {products_in_cart['meta']['display_price']['with_tax']['formatted']}"
-    keyboard = []
-    keyboard.append([InlineKeyboardButton('back', callback_data='назад')])
+    keyboard.append([InlineKeyboardButton('В меню', callback_data='назад')])
     reply_markup = InlineKeyboardMarkup(keyboard)
+    if not products_in_cart['data']:
+        cart_text = 'В данный момент ваша корзина пуста, вернитесь в главное ' \
+                    'меню и сначала положите товар в корзину.'
     bot.send_message(chat_id=query.message.chat_id, text=cart_text, reply_markup=reply_markup)
     bot.delete_message(chat_id=query.message.chat_id,
                        message_id=query.message.message_id)
