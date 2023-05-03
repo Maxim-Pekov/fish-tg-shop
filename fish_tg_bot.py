@@ -1,5 +1,5 @@
 import logging
-import redis
+import redis as redis_db
 import time
 from environs import Env
 from functools import partial
@@ -169,10 +169,10 @@ def handle_paid(bot, update, access_token):
     return "HANDLE_PAID"
 
 
-def handle_users_reply(bot, update, access_token, client_id, expires_time):
+def handle_users_reply(bot, update, access_token, client_id, expires_time,
+                       redis, client_secret):
     """Функция, которая запускается при любом сообщении от пользователя и
     решает как его обработать."""
-    db = get_database_connection()
 
     if time.time() >= expires_time:
         access_token, expires_time = fetch_access_token(client_id, client_secret)
@@ -194,7 +194,7 @@ def handle_users_reply(bot, update, access_token, client_id, expires_time):
     elif 'paid' in user_reply:
         user_state = "HANDLE_PAID"
     else:
-        user_state = db.get(chat_id).decode("utf-8")
+        user_state = redis.get(chat_id).decode("utf-8")
     
     states_functions = {
         'START': start,
@@ -205,31 +205,27 @@ def handle_users_reply(bot, update, access_token, client_id, expires_time):
     }
     state_handler = states_functions[user_state]
     next_state = state_handler(bot, update, access_token)
-    db.set(chat_id, next_state)
+    redis.set(chat_id, next_state)
 
 
-def get_database_connection():
-    """
-    Возвращает конекшн с базой данных Redis, либо создаёт новый, если он ещё не создан.
-    """
-    global _database
-    if _database is None:
-        database_password = env.str("REDIS_PASSWORD")
-        database_host = env.str("REDIS_HOST")
-        database_port = env.str("REDIS_PORT")
-        _database = redis.Redis(host=database_host, port=database_port, password=database_password)
-    return _database
-
-
-if __name__ == '__main__':
+def main():
     token = env.str("TG_API_TOKEN")
     client_id = env.str("CLIENT_ID")
     client_secret = env.str("SECRET_KEY")
+
+    database_password = env.str("REDIS_PASSWORD")
+    database_host = env.str("REDIS_HOST")
+    database_port = env.str("REDIS_PORT")
+
+    redis = redis_db.Redis(host=database_host, port=database_port,
+                            password=database_password)
+
     access_token, expires_time = fetch_access_token(client_id, client_secret)
     updater = Updater(token)
 
     handle_users = partial(handle_users_reply, access_token=access_token,
-                           client_id=client_id, expires_time=expires_time)
+                           client_id=client_id, expires_time=expires_time,
+                           redis=redis, client_secret=client_secret)
 
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CallbackQueryHandler(handle_users))
@@ -237,3 +233,7 @@ if __name__ == '__main__':
     dispatcher.add_handler(CommandHandler('start', handle_users))
 
     updater.start_polling()
+
+
+if __name__ == '__main__':
+    main()
