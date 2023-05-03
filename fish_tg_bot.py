@@ -1,11 +1,12 @@
 import logging
 import redis
+import time
 from environs import Env
 from functools import partial
-from main import fetch_products, fetch_access_token, fetch_product_by_id, fetch_product_photo_by_id, fetch_photo_by_id
-from main import fetch_product_prices, fetch_prices_book, create_client, \
-    fetch_product_stock, fetch_access_marker, get_branch, \
-    put_product_to_branch, fetch_products_branch, remove_product_from_cart
+from elasticpath_api import fetch_products, fetch_access_token, create_client, \
+    fetch_product_by_id, fetch_product_photo_id, fetch_photo_by_id, \
+    fetch_product_prices, fetch_prices_book, fetch_product_stock, \
+    put_product_to_cart, fetch_cart_products, remove_product_from_cart
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Filters, Updater
@@ -18,8 +19,7 @@ env.read_env()
 _database = None
 
 
-def start(bot, update, access_token, client_id):
-
+def start(bot, update, access_token):
     products = fetch_products(access_token)
     keyboard = []
     for product in products['data']:
@@ -32,7 +32,7 @@ def start(bot, update, access_token, client_id):
     return "HANDLE_DESCRIPTION"
 
 
-def handle_description(bot, update, access_token, client_id):
+def handle_description(bot, update, access_token):
     """Хэндлер для обработки нажатия на кнопку."""
     query = update.callback_query
     chat_id = query.message.chat_id
@@ -55,12 +55,11 @@ def handle_description(bot, update, access_token, client_id):
     product_price = prices['data'][0]['attributes']['currencies']['USD']['amount']
     product_stock = fetch_product_stock(access_token, product_id)
     if product_count:
-        put_product_to_branch(
-            access_token, product, chat_id, client_id,
-            product_price, product_count
+        put_product_to_cart(
+            access_token, product, chat_id, product_price, product_count
         )
     try:
-        photo_id = fetch_product_photo_by_id(access_token, product_id)
+        photo_id = fetch_product_photo_id(access_token, product_id)
         photo = fetch_photo_by_id(access_token, photo_id)
     except TypeError:
         photo = "https://avatars.mds.yandex.net/i?id=cd502f949a596919c1b8feac39a0a5e4-5330065-images-thumbs&n=13"
@@ -74,7 +73,7 @@ def handle_description(bot, update, access_token, client_id):
                               InlineKeyboardButton("5кг.", callback_data=f'5кг {product_id}'),
                               InlineKeyboardButton("10кг.", callback_data=f'10кг {product_id}')]
     keyboard.append(product_count_keyboard)
-    products = fetch_products_branch(access_token, chat_id)
+    products = fetch_cart_products(access_token, chat_id)
     if products.get('data'):
         keyboard.append(
             [InlineKeyboardButton(
@@ -94,7 +93,7 @@ def handle_description(bot, update, access_token, client_id):
     return "HANDLE_DESCRIPTION"
 
 
-def handle_menu(bot, update, access_token, client_id):
+def handle_menu(bot, update, access_token):
     query = update.callback_query
     products = fetch_products(access_token)
     keyboard = []
@@ -109,14 +108,14 @@ def handle_menu(bot, update, access_token, client_id):
     return "HANDLE_DESCRIPTION"
 
 
-def handle_cart(bot, update, access_token, client_id):
+def handle_cart(bot, update, access_token):
     query = update.callback_query
     chat_id = query.message.chat_id
     if "удалить" in query.data:
         product_id = query.data.split()[1]
         remove_product_from_cart(access_token, chat_id, product_id)
 
-    products_in_cart = fetch_products_branch(access_token, chat_id)
+    products_in_cart = fetch_cart_products(access_token, chat_id)
     cart_text = ''
     keyboard = []
     for product in products_in_cart['data']:
@@ -145,7 +144,7 @@ def handle_cart(bot, update, access_token, client_id):
     return "HANDLE_CART"
 
 
-def handle_paid(bot, update, access_token, client_id):
+def handle_paid(bot, update, access_token):
     query = update.callback_query
 
     text = 'Пришлите, пожалуйста, ваш емайл.'
@@ -153,7 +152,7 @@ def handle_paid(bot, update, access_token, client_id):
         chat_id = update.message.chat_id
         email = update.message.text
         username = update.effective_user.username
-        client = create_client(access_token, username, email)
+        create_client(access_token, username, email)
 
         text = f'Ваш емайл: {email}\n\nВерно?\n'
         keyboard = [
@@ -170,22 +169,14 @@ def handle_paid(bot, update, access_token, client_id):
     return "HANDLE_PAID"
 
 
-
-
-def handle_users_reply(bot, update, access_token, client_id):
-    """
-    Функция, которая запускается при любом сообщении от пользователя и решает как его обработать.
-    Эта функция запускается в ответ на эти действия пользователя:
-        * Нажатие на inline-кнопку в боте
-        * Отправка сообщения боту
-        * Отправка команды боту
-    Она получает стейт пользователя из базы данных и запускает соответствующую функцию-обработчик (хэндлер).
-    Функция-обработчик возвращает следующее состояние, которое записывается в базу данных.
-    Если пользователь только начал пользоваться ботом, Telegram форсит его написать "/start",
-    поэтому по этой фразе выставляется стартовое состояние.
-    Если пользователь захочет начать общение с ботом заново, он также может воспользоваться этой командой.
-    """
+def handle_users_reply(bot, update, access_token, client_id, expires_time):
+    """Функция, которая запускается при любом сообщении от пользователя и
+    решает как его обработать."""
     db = get_database_connection()
+
+    if time.time() >= expires_time:
+        access_token, expires_time = fetch_access_token(client_id, client_secret)
+
     if update.message:
         user_reply = update.message.text
         chat_id = update.message.chat_id
@@ -213,11 +204,8 @@ def handle_users_reply(bot, update, access_token, client_id):
         'HANDLE_PAID': handle_paid
     }
     state_handler = states_functions[user_state]
-    try:
-        next_state = state_handler(bot, update, access_token, client_id)
-        db.set(chat_id, next_state)
-    except Exception as err:
-        print(err)
+    next_state = state_handler(bot, update, access_token)
+    db.set(chat_id, next_state)
 
 
 def get_database_connection():
@@ -237,10 +225,11 @@ if __name__ == '__main__':
     token = env.str("TG_API_TOKEN")
     client_id = env.str("CLIENT_ID")
     client_secret = env.str("SECRET_KEY")
-    access_token = fetch_access_token(client_id, client_secret)
+    access_token, expires_time = fetch_access_token(client_id, client_secret)
     updater = Updater(token)
 
-    handle_users = partial(handle_users_reply, access_token=access_token, client_id=client_id)
+    handle_users = partial(handle_users_reply, access_token=access_token,
+                           client_id=client_id, expires_time=expires_time)
 
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CallbackQueryHandler(handle_users))
