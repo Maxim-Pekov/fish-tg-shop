@@ -3,6 +3,8 @@ import redis as redis_db
 import time
 from environs import Env
 from functools import partial
+from logs_handler import TelegramLogsHandler
+
 from elasticpath_api import fetch_products, fetch_access_token, create_client, \
     fetch_product_by_id, fetch_product_photo_id, fetch_photo_by_id, \
     fetch_product_prices, fetch_prices_book, fetch_product_stock, \
@@ -16,7 +18,8 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 env = Env()
 env.read_env()
 
-_database = None
+logger = logging.getLogger(__file__)
+exception_logger = logging.getLogger('exception_logger')
 
 
 def start(bot, update, access_token):
@@ -25,10 +28,9 @@ def start(bot, update, access_token):
     for product in products['data']:
         keyboard.append([InlineKeyboardButton(product['attributes']['name'],
                                               callback_data=product['id'])])
-
     reply_markup = InlineKeyboardMarkup(keyboard)
-
-    update.message.reply_text('Please choose:', reply_markup=reply_markup)
+    text = "Добро пожаловать в магазин рыбы, выберете понравившуюся рыбу ниже."
+    update.message.reply_text(text, reply_markup=reply_markup)
     return "HANDLE_DESCRIPTION"
 
 
@@ -209,7 +211,8 @@ def handle_users_reply(bot, update, access_token, client_id, expires_time,
 
 
 def main():
-    token = env.str("TG_API_TOKEN")
+    api_tg_token = env.str("TG_API_TOKEN")
+    chat_id = env.str("TG_CHAT_ID")
     client_id = env.str("CLIENT_ID")
     client_secret = env.str("SECRET_KEY")
 
@@ -220,8 +223,15 @@ def main():
     redis = redis_db.Redis(host=database_host, port=database_port,
                             password=database_password)
 
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - '
+                               '%(message)s', datefmt='%d-%m-%Y %I:%M:%S %p',
+                        level=logging.INFO)
+
+    exception_logger.setLevel(logging.ERROR)
+    exception_logger.addHandler(TelegramLogsHandler(api_tg_token, chat_id))
+
     access_token, expires_time = fetch_access_token(client_id, client_secret)
-    updater = Updater(token)
+    updater = Updater(api_tg_token)
 
     handle_users = partial(handle_users_reply, access_token=access_token,
                            client_id=client_id, expires_time=expires_time,
