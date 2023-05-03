@@ -196,7 +196,7 @@ def handle_paid(bot, update, access_token):
         )
         bot.delete_message(
             chat_id=chat_id,
-            message_id=query.message.message_id
+            message_id=update.effective_message.message_id
         )
         return "HANDLE_PAID"
     chat_id = query.message.chat_id
