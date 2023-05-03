@@ -57,8 +57,8 @@ def handle_description(bot, update, access_token, client_id):
 
     product_stock = fetch_product_stock(access_token, product_id)
     if marker:
-        z = put_product_to_branch(marker, product, branch_url, client_id, product_price, product_count)
-        branch = fetch_products_branch(marker, branch_url)
+        z = put_product_to_branch(marker, product, chat_id, client_id, product_price, product_count)
+        branch = fetch_products_branch(marker, chat_id)
     try:
         photo_id = fetch_product_photo_by_id(access_token, product_id)
         photo = fetch_photo_by_id(access_token, photo_id)
@@ -72,6 +72,8 @@ def handle_description(bot, update, access_token, client_id):
                               InlineKeyboardButton("5кг.", callback_data=f'5кг {product_id}'),
                               InlineKeyboardButton("10кг.", callback_data=f'10кг {product_id}')]
     keyboard.append(product_count_keyboard)
+    if marker:
+        keyboard.append([InlineKeyboardButton("Корзина", callback_data='корзина')])
     keyboard.append([InlineKeyboardButton("Назад", callback_data='назад')])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -94,6 +96,28 @@ def handle_menu(bot, update, access_token, client_id):
     bot.delete_message(chat_id=query.message.chat_id,
                        message_id=query.message.message_id)
     return "HANDLE_DESCRIPTION"
+
+
+def handle_cart(bot, update, access_token, client_id):
+    query = update.callback_query
+    chat_id = query.message.chat_id
+    products_in_cart = fetch_products_branch(access_token, chat_id)
+    cart_text = ''
+    for product in products_in_cart['data']:
+        prodect_text = f"{product['name']}:\n" \
+                       f"Описание: {product['description']}\n" \
+                       f"Кол-во: {product['quantity']}шт.\n" \
+                       f"Цена: ${product['unit_price']['amount']} за кг.\n" \
+                       f"Стоймость позиции: ${product['value']['amount']}\n\n"
+        cart_text += prodect_text
+    cart_text += f"Итоговая стоймость: {products_in_cart['meta']['display_price']['with_tax']['formatted']}"
+    keyboard = []
+    keyboard.append([InlineKeyboardButton('back', callback_data='назад')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    bot.send_message(chat_id=query.message.chat_id, text=cart_text, reply_markup=reply_markup)
+    bot.delete_message(chat_id=query.message.chat_id,
+                       message_id=query.message.message_id)
+    return "HANDLE_CART"
 
 
 def handle_users_reply(bot, update, access_token, client_id):
@@ -122,13 +146,16 @@ def handle_users_reply(bot, update, access_token, client_id):
         user_state = 'START'
     elif user_reply == 'назад':
         user_state = 'HANDLE_MENU'
+    elif 'корзина' in user_reply:
+        user_state = 'HANDLE_CART'
     else:
         user_state = db.get(chat_id).decode("utf-8")
     
     states_functions = {
         'START': start,
         'HANDLE_MENU': handle_menu,
-        'HANDLE_DESCRIPTION': handle_description
+        'HANDLE_DESCRIPTION': handle_description,
+        'HANDLE_CART': handle_cart
     }
     state_handler = states_functions[user_state]
     try:

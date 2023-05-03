@@ -67,10 +67,10 @@ def get_branch_f(access_token):
     return response.json()
 
 
-def put_product_to_branch(marker, product, branch_url, client_id, product_price, product_count):
+def put_product_to_branch(marker, product, chat_id, client_id, product_price, product_count):
     if not marker:
         fetch_access_marker(client_id)
-    url = f'https://api.moltin.com/v2/carts/{branch_url}/items'
+    url = f'https://api.moltin.com/v2/carts/{chat_id}/items'
     headers = {
         'Authorization': f'Bearer {marker}',
         'Content-Type': 'application/json',
@@ -92,14 +92,14 @@ def put_product_to_branch(marker, product, branch_url, client_id, product_price,
     return True
 
 
-def fetch_products_branch(marker, branch_url):
-    url = f'https://api.moltin.com/v2/carts/{branch_url}/items'
+def fetch_products_branch(marker, chat_id):
+    url = f'https://api.moltin.com/v2/carts/{chat_id}/items'
     headers = {
         'Authorization': f'Bearer {marker}',
     }
     response = requests.get(url, headers=headers)
     response.raise_for_status()
-    return response
+    return response.json()
 
 
 def fetch_product_by_id(access_token, product_id):
