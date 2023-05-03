@@ -89,7 +89,7 @@ def put_product_to_branch(marker, product, chat_id, client_id, product_price, pr
     }
     response = requests.post(url, headers=headers, json=payload)
     response.raise_for_status()
-    return True
+    return response.json()
 
 
 def fetch_products_branch(access_token, chat_id):
@@ -187,19 +187,23 @@ def generate_client_token(access_token):
     return response
 
 
-def create_client(access_token, name, email, password, type):
+def create_client(access_token, name, email, password='', type='customer'):
     url = 'https://api.moltin.com/v2/customers'
     headers = {
         'Authorization': f'Bearer {access_token}',
+        "Content-Type": "application/json"
     }
-    data = {
-        'type': type,
-        'name': name,
-        'email': email,
-        'password': password
-
+    payload = {
+        'data': {
+            'type': type,
+            'name': name,
+            'email': email,
+            'password': password
+        }
     }
-    response = requests.post(url, headers=headers, data=data)
+    response = requests.post(url, headers=headers, json=payload)
+    response.raise_for_status()
+    return response.json()
 
 
 def add_product_to_cart(reference, access_token, client_id, one_product):
