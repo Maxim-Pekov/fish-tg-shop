@@ -10,8 +10,8 @@ def fetch_access_token(client_id, client_secret):
     }
     response = requests.post(url, data=data)
     response.raise_for_status()
-    expires_time = response.json()['expires']
-    return response.json()['access_token'], expires_time
+    access_token = response.json()
+    return access_token['access_token'], access_token['expires']
 
 
 def fetch_products(access_token):
