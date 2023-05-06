@@ -16,9 +16,6 @@ from telegram.ext import Filters, Updater
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 
-env = Env()
-env.read_env()
-
 logger = logging.getLogger(__file__)
 exception_logger = logging.getLogger('exception_logger')
 
@@ -245,6 +242,9 @@ def handle_users_reply(bot, update, access_token, client_id, expires_time,
 
 
 def main():
+    env = Env()
+    env.read_env()
+
     api_tg_token = env.str("TG_API_TOKEN")
     chat_id = env.str("TG_CHAT_ID")
     client_id = env.str("CLIENT_ID")
