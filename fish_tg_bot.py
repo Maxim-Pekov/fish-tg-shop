@@ -42,8 +42,7 @@ def handle_description(bot, update, access_token):
         product = fetch_product_by_id(access_token, product_id)
     else:
         data = query.data.replace('кг', '')
-        product_count = data.split()[0]
-        product_id = data.split()[1]
+        product_count, product_id = data.split()
         product = fetch_product_by_id(access_token, product_id)
     product_attributes = product['data']['attributes']
     price_books = fetch_prices_book(access_token)
@@ -129,7 +128,7 @@ def handle_cart(bot, update, access_token):
     query = update.callback_query
     chat_id = query.message.chat_id
     if "удалить" in query.data:
-        product_id = query.data.split()[1]
+        _, product_id = query.data.split()
         remove_product_from_cart(access_token, chat_id, product_id)
 
     products_in_cart = fetch_cart_products(access_token, chat_id)
