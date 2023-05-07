@@ -1,3 +1,4 @@
+import textwrap
 import time
 import logging
 
@@ -142,13 +143,12 @@ def handle_cart(bot, update, access_token):
             )]
         )
         price_with_tax = product['meta']['display_price']['with_tax']
-        prodect_text = f"{product['name']}:\n" \
-                       f"Описание: {product['description']}\n" \
-                       f"Кол-во: {product['quantity']}шт.\n" \
-                       f"Цена: {price_with_tax['unit']['formatted']} за кг.\n"\
-                       f"Стоймость позиции: " \
-                       f"{price_with_tax['value']['formatted']}\n\n"
-        cart_text += prodect_text
+        product_text = f"""{product['name']}:
+        Описание: {product['description']}
+        Кол-во: {product['quantity']}шт.
+        Цена: {price_with_tax['unit']['formatted']} за кг.
+        Стоймость позиции: {price_with_tax['value']['formatted']}\n\n"""
+        cart_text += textwrap.dedent(product_text)
     value_price = products_in_cart['meta']['display_price']['with_tax']
     cart_text += f"Итоговая стоймость: {value_price['formatted']}"
     keyboard.append([InlineKeyboardButton('В меню', callback_data='назад')])
