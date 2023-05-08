@@ -38,6 +38,10 @@ def handle_description(bot, update, access_token):
     query = update.callback_query
     chat_id = query.message.chat_id
     product_count = ''
+    if 'back' in query.data:
+        return handle_menu(bot, update, access_token)
+    if 'cart' in query.data:
+        return handle_cart(bot, update, access_token)
     if 'кг' not in query.data:
         product_id = query.data
         product = fetch_product_by_id(access_token, product_id)
@@ -82,14 +86,14 @@ def handle_description(bot, update, access_token):
             [InlineKeyboardButton(
                 f"Корзина: {len(products.get('data'))} продукт/ов, на сумму: "
                 f"{products['meta']['display_price']['with_tax']['formatted']}",
-                callback_data='корзина'
+                callback_data='cart'
             )]
         )
     else:
         keyboard.append(
-            [InlineKeyboardButton("Корзина пустая", callback_data='корзина')]
+            [InlineKeyboardButton("Корзина пустая", callback_data='cart')]
         )
-    keyboard.append([InlineKeyboardButton("Назад", callback_data='назад')])
+    keyboard.append([InlineKeyboardButton("Назад", callback_data='back')])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     bot.send_photo(
@@ -128,6 +132,10 @@ def handle_menu(bot, update, access_token):
 def handle_cart(bot, update, access_token):
     query = update.callback_query
     chat_id = query.message.chat_id
+    if 'back' in query.data:
+        return handle_menu(bot, update, access_token)
+    if 'paid' in query.data:
+        return handle_paid(bot, update, access_token)
     if "удалить" in query.data:
         _, product_id = query.data.split()
         remove_product_from_cart(access_token, chat_id, product_id)
@@ -151,7 +159,7 @@ def handle_cart(bot, update, access_token):
         cart_text += textwrap.dedent(product_text)
     value_price = products_in_cart['meta']['display_price']['with_tax']
     cart_text += f"Итоговая стоймость: {value_price['formatted']}"
-    keyboard.append([InlineKeyboardButton('В меню', callback_data='назад')])
+    keyboard.append([InlineKeyboardButton('В меню', callback_data='back')])
     keyboard.append([InlineKeyboardButton('Оплатить', callback_data='paid')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     if not products_in_cart['data']:
@@ -170,9 +178,16 @@ def handle_cart(bot, update, access_token):
 
 
 def handle_paid(bot, update, access_token):
-    query = update.callback_query
+    try:
+        data = update.callback_query.data
+        chat_id = update.callback_query.message.chat_id
+        if 'back' in data:
+            return handle_menu(bot, update, access_token)
+    except AttributeError:
+        pass
 
     text = 'Пришлите, пожалуйста, ваш емайл.'
+
     if update.message:
         chat_id = update.message.chat_id
         email = update.message.text
@@ -181,8 +196,8 @@ def handle_paid(bot, update, access_token):
 
         text = f'Ваш емайл: {email}\n\nВерно?\n'
         keyboard = [
-            [InlineKeyboardButton('Верно', callback_data='назад')],
-            [InlineKeyboardButton('Не верно', callback_data='HANDLE_PAID')],
+            [InlineKeyboardButton('Верно', callback_data='back')],
+            [InlineKeyboardButton('Не верно', callback_data='paid')],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         bot.send_message(
@@ -195,9 +210,8 @@ def handle_paid(bot, update, access_token):
             message_id=update.effective_message.message_id
         )
         return "HANDLE_PAID"
-    chat_id = query.message.chat_id
     bot.send_message(chat_id=chat_id, text=text)
-    bot.delete_message(chat_id=chat_id, message_id=query.message.message_id)
+    bot.delete_message(chat_id=chat_id, message_id=update.callback_query.message.message_id)
     return "HANDLE_PAID"
 
 
@@ -220,12 +234,6 @@ def handle_users_reply(bot, update, access_token, client_id, expires_time,
         return
     if user_reply == '/start':
         user_state = 'START'
-    elif user_reply == 'назад':
-        user_state = 'HANDLE_MENU'
-    elif 'корзина' in user_reply:
-        user_state = 'HANDLE_CART'
-    elif 'paid' in user_reply:
-        user_state = "HANDLE_PAID"
     else:
         user_state = redis.get(chat_id).decode("utf-8")
     states_functions = {
